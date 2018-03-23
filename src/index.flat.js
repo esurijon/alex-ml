@@ -1,5 +1,6 @@
 import Rx from 'rxjs';
 import Ml from './ml';
+import flatten from 'flat';
 
 function getParams() {
   return {
@@ -19,9 +20,9 @@ function extractOrderInfo(order) {
 }
 
 function toCsvLine(item) {
-  return Object.keys(item)
+  return Object.keys(flatten(item))
     .map( key => item[key] )
-    .join(';');
+    .join(',');
 }
 
 function getOrdersCount() {
@@ -57,13 +58,12 @@ function retrieveResults() {
     .map( page => [from+(page*size), size] )
     .flatMap( ([offset, limit]) => ml.getOrdersChunk(offset, limit))
     .flatMap( chunk => Rx.Observable.from(chunk))
-    .map( extractOrderInfo )
-    .flatMap( orderInfo => { 
-      const message$ = ml.getOrderComments(orderInfo.id);
-      return message$.map( messages => [orderInfo, messages]);
+    .flatMap( order => { 
+      const message$ = ml.getOrderComments(order.id);
+      return message$.map( messages => [order, messages]);
     })
-    .flatMap( ([orderInfo, messages]) => {
-      const array = messages.map( message => Object.assign(orderInfo, {message: message.text.plain.replace('\n', ' ')}))
+    .flatMap( ([order, messages]) => {
+      const array = messages.map( message => Object.assign(order, {message: message.text.plain}))
       return Rx.Observable.from(array);
     })
     .filter( item => emailRe.test(item.message))
