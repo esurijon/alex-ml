@@ -9,8 +9,8 @@ function extractEmail(messages) {
     .map( message => message.text.plain )
     .filter( message => emailRe.test(message))
     .map( message => message.match(emailRe)[0] )
-    //.filter( email => !email.endsWith("@mail.mercadolibre.com") || !email === 'nescaps@gmail.com')
-    ;
+    .filter( email => !email.endsWith("@mail.mercadolibre.com") && !email === 'nescaps@gmail.com')
+  ;
   return emails.length > 0 ? emails[emails.length-1] : 'N/A';
 }
 
