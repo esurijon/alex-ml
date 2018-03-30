@@ -25,7 +25,7 @@ function getParams() {
 }
 
 function headers(item) {
-  return Object.keys(flatten(item, {safe: true})).join(',');
+  return 'email,' + Object.keys(flatten(item, {safe: true})).join(',');
 }
 
 function toCsvLine(item) {
