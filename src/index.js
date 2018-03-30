@@ -1,5 +1,18 @@
 import Rx from 'rxjs';
 import Ml from './ml';
+import flatten from 'flat';
+
+const emailRe =/[\w.+-]+@[\w+-.]+/
+
+function extractEmail(messages) {
+  const emails = messages
+    .map( message => message.text.plain )
+    .filter( message => emailRe.test(message))
+    .map( message => message.match(emailRe)[0] )
+    //.filter( email => !email.endsWith("@mail.mercadolibre.com") || !email === 'nescaps@gmail.com')
+    ;
+  return emails.length > 0 ? emails[emails.length-1] : 'N/A';
+}
 
 function getParams() {
   return {
@@ -11,17 +24,14 @@ function getParams() {
   };
 }
 
-function extractOrderInfo(order) {
-  return {
-    id: order.id,
-    name: order.buyer.nickname
-  };
+function headers(item) {
+  return Object.keys(flatten(item, {safe: true})).join(',');
 }
 
 function toCsvLine(item) {
-  return Object.keys(item)
+  return Object.keys(flatten(item, {safe: true}))
     .map( key => item[key] )
-    .join(';');
+    .join(',');
 }
 
 function getOrdersCount() {
@@ -46,32 +56,19 @@ function retrieveResults() {
 
   const ml = new Ml(seller, token);
 
-  const emailRe =/[\w.+-]+@[\w+-.]+/
-
-  Rx.Observable
-    .range(0, (to-from)/size)
-    .map( page => [from+(page*size), size] )
+  const header$ = ml.getOrdersChunk(0, 1)
+    .map(arr => arr[0])
+    .map(headers);
 
   const stream = Rx.Observable
     .range(0, (to-from)/size)
     .map( page => [from+(page*size), size] )
     .flatMap( ([offset, limit]) => ml.getOrdersChunk(offset, limit))
     .flatMap( chunk => Rx.Observable.from(chunk))
-    .map( extractOrderInfo )
-    .flatMap( orderInfo => { 
-      const message$ = ml.getOrderComments(orderInfo.id);
-      return message$.map( messages => [orderInfo, messages]);
-    })
-    .flatMap( ([orderInfo, messages]) => {
-      const array = messages.map( message => Object.assign(orderInfo, {message: message.text.plain.replace('\n', ' ')}))
-      return Rx.Observable.from(array);
-    })
-    .filter( item => emailRe.test(item.message))
-    .map( item => Object.assign(item, {email: item.message.match(emailRe)[0]}) )
-    .filter( item => !item.email.endsWith("@mail.mercadolibre.com") )
-    .map( item => {
-      delete item.message;
-      return item;
+    .flatMap( order => {
+      const orderEmail = ml.getOrderComments(order.id)
+        .map( extractEmail);
+      return orderEmail.map( email => Object.assign({email}, order) );
     })
     .map( toCsvLine )
     .scan( (lines, line) => lines+'\n'+line, '')
@@ -82,11 +79,22 @@ function retrieveResults() {
     lines => {
       results.innerHTML = lines;
     }, 
-    (err) => alert("fallo"), 
+    (err) => {
+      console.log(err);
+      alert("fallo");
+    }, 
     () => alert("completado")
   );
 
+  const headersEl = document.getElementById('headers');
+  header$.subscribe( 
+    headers => {
+      headersEl.innerHTML = headers;
+    }
+  );
+  
 }
+
 
 document.getElementById('getcount').onclick = getOrdersCount;
 document.getElementById('retrieve').onclick = retrieveResults;
