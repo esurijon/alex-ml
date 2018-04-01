@@ -9,7 +9,8 @@ function extractEmail(messages) {
     .map( message => message.text.plain )
     .filter( message => emailRe.test(message))
     .map( message => message.match(emailRe)[0] )
-    .filter( email => !email.endsWith("@mail.mercadolibre.com") && !email === 'nescaps@gmail.com')
+    .filter( email => !email.endsWith("@mail.mercadolibre.com") )
+    .filter( email => email != 'nescaps@gmail.com' )
   ;
   return emails.length > 0 ? emails[emails.length-1] : 'N/A';
 }
@@ -52,13 +53,13 @@ function getOrdersCount() {
 
 function retrieveResults() {
 
+  const results = document.getElementById('results');
+
+  results.innerHTML = '';
+
   const {seller, token, from, to, size} = getParams();
 
   const ml = new Ml(seller, token);
-
-  const header$ = ml.getOrdersChunk(0, 1)
-    .map(arr => arr[0])
-    .map(headers);
 
   const stream = Rx.Observable
     .range(0, (to-from)/size)
@@ -68,16 +69,21 @@ function retrieveResults() {
     .flatMap( order => {
       const orderEmail = ml.getOrderComments(order.id)
         .map( extractEmail);
-      return orderEmail.map( email => Object.assign({email}, order) );
+      return orderEmail.map( email => { 
+        return {
+          order: order.id,
+          product: order.order_items[0].item.title,
+          buyerNick: order.buyer.nickname,
+          email: email
+        };
+      });
     })
     .map( toCsvLine )
-    .scan( (lines, line) => lines+'\n'+line, '')
   ;
 
-  const results = document.getElementById('results');
   stream.subscribe(
     lines => {
-      results.innerHTML = lines;
+      results.innerHTML += lines + '\n';
     }, 
     (err) => {
       console.log(err);
@@ -86,12 +92,19 @@ function retrieveResults() {
     () => alert("completado")
   );
 
+  /*
   const headersEl = document.getElementById('headers');
+
+  const header$ = ml.getOrdersChunk(0, 1)
+    .map(arr => arr[0])
+    .map(headers);
+
   header$.subscribe( 
     headers => {
       headersEl.innerHTML = headers;
     }
   );
+  */
   
 }
 
